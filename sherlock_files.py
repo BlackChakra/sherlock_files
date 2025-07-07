@@ -1,11 +1,11 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLineEdit, QListWidget, QLabel
+    QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
-from PySide6.QtWidgets import QFileDialog
 
 import os
 
+# 🔍 Function to find matching files in a folder
 def find_files(search_folder, keyword):
     matches = []
     for root, dirs, files in os.walk(search_folder):
@@ -15,34 +15,33 @@ def find_files(search_folder, keyword):
                 matches.append(full_path)
     return matches
 
-# Create the main app
+# 🌟 Start the app
 app = QApplication([])
 
-# Create the main window
+# 🌟 Create the main window
 window = QWidget()
 window.setWindowTitle("Sherlock Files 🕵️‍♂️")
-window.setFixedSize(600, 400)  # Window size
+window.setFixedSize(600, 400)
 
-# Vertical layout: stacks widgets from top to bottom
+# 🌟 Layouts
 main_layout = QVBoxLayout()
-
-# Horizontal layout for the search bar and button
 search_layout = QHBoxLayout()
 
-# Input where user types the filename
+# 🌟 Search input
 search_input = QLineEdit()
 search_input.setPlaceholderText("Enter file name to search")
 
-# Variable to hold the default search folder
+# 🌟 Results list
+results_list = QListWidget()
+
+# 🌟 Default search folder
 selected_folder = os.path.expanduser("~/Documents")
 
-# Choose Folder button
+# 🌟 Buttons
 choose_folder_button = QPushButton("Choose Folder")
-
-# Search button
 search_button = QPushButton("Search")
 
-# Action when Choose Folder button is clicked
+# 🌟 Folder picker action
 def on_choose_folder():
     global selected_folder
     folder = QFileDialog.getExistingDirectory(window, "Select Folder")
@@ -51,47 +50,36 @@ def on_choose_folder():
         results_list.clear()
         results_list.addItem(f"Searching in: {selected_folder}")
 
-# Action when Search button is clicked
+# 🌟 Search action
 def on_search():
-    # 1. Get search text from the input box
     keyword = search_input.text().strip()
-
-    # 2. Clear previous results
     results_list.clear()
 
-    # 3. Use the selected folder
     search_folder = selected_folder
-
-    # 4. Run the file search
     results = find_files(search_folder, keyword)
 
-    # 5. Show the results
     if results:
         for file_path in results:
             results_list.addItem(file_path)
     else:
         results_list.addItem("No files found.")
 
-# Connect buttons to their functions
+# 🌟 Connect buttons
 choose_folder_button.clicked.connect(on_choose_folder)
 search_button.clicked.connect(on_search)
 
-# Add input and buttons to the search bar layout
+# 🌟 Add widgets to layouts
 search_layout.addWidget(search_input)
 search_layout.addWidget(choose_folder_button)
 search_layout.addWidget(search_button)
 
-
-# Add everything to the main layout
 main_layout.addLayout(search_layout)
 main_layout.addWidget(QLabel("Search Results:"))
 main_layout.addWidget(results_list)
 
-# Set the layout on the main window
+# 🌟 Finalize window
 window.setLayout(main_layout)
-
-# Show the window
 window.show()
 
-# Start the event loop
+# 🌟 Start the app event loop
 app.exec()
