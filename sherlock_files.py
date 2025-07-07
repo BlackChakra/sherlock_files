@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
 from PySide6.QtCore import QThread, Signal, QObject
+from PySide6.QtGui import QIcon
 import subprocess
 import platform
 import os
@@ -55,6 +56,7 @@ def on_item_double_clicked(item):
 app = QApplication([])
 window = QWidget()
 window.setWindowTitle("Sherlock Files 🕵️‍♂️")
+window.setWindowIcon(QIcon("assets/icon.png"))
 window.setFixedSize(600, 400)
 
 main_layout = QVBoxLayout()
