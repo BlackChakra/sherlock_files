@@ -2,12 +2,13 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
-from PySide6.QtCore import QThread, Signal, QObject, Qt
+from PySide6.QtCore import QThread, Signal, QObject
 import subprocess
 import platform
 import os
 
-# 🌟 Worker thread class
+
+# 🌟 Worker class for file searching
 class FileSearchWorker(QObject):
     finished = Signal(list)
 
@@ -25,15 +26,17 @@ class FileSearchWorker(QObject):
             for file in files:
                 if self._is_cancelled:
                     break
-                if self.keyword.lower() in file.lower():
-                    matches.append(os.path.join(root, file))
+                full_path = os.path.join(root, file)
+                # ✅ Search full path, not just filename
+                if self.keyword.lower() in full_path.lower():
+                    matches.append(full_path)
         self.finished.emit(matches)
 
     def cancel(self):
         self._is_cancelled = True
 
 
-# 🌟 Open files/folders on double-click
+# 🌟 Double-click to open file/folder
 def on_item_double_clicked(item):
     path = item.text()
 
@@ -42,13 +45,13 @@ def on_item_double_clicked(item):
 
     if platform.system() == "Windows":
         os.startfile(path)
-    elif platform.system() == "Darwin":
+    elif platform.system() == "Darwin":  # macOS
         subprocess.run(["open", path])
     else:
         subprocess.run(["xdg-open", path])
 
 
-# 🌟 App setup
+# 🌟 Main App Setup
 app = QApplication([])
 window = QWidget()
 window.setWindowTitle("Sherlock Files 🕵️‍♂️")
@@ -58,20 +61,19 @@ main_layout = QVBoxLayout()
 search_layout = QHBoxLayout()
 
 search_input = QLineEdit()
-search_input.setPlaceholderText("Enter file name to search")
+search_input.setPlaceholderText("Enter file name or folder name to search")
 
 results_list = QListWidget()
 results_list.itemDoubleClicked.connect(on_item_double_clicked)
 
 status_label = QLabel("Ready.")
 
-# 🌟 Buttons
 choose_folder_button = QPushButton("Choose Folder")
 search_button = QPushButton("Search")
 cancel_button = QPushButton("Cancel Search")
 
-# 🌟 Default search folder = Desktop for easier testing
-selected_folder = os.path.join(os.path.expanduser("~"), "Desktop")
+# 🌟 Defaults
+selected_folder = os.path.join(os.path.expanduser("~"), "Desktop")  # You can change this default
 current_worker = None
 current_thread = None
 
@@ -99,7 +101,6 @@ def on_search_complete(results):
 
     status_label.setText("Search complete.")
 
-    # Clean up the worker and thread
     if current_thread:
         current_thread.quit()
         current_thread.wait()
@@ -108,12 +109,11 @@ def on_search_complete(results):
     if current_worker:
         current_worker.deleteLater()
 
-    # Clear references
     current_worker = None
     current_thread = None
 
 
-# 🌟 Search action
+# 🌟 Start search
 def on_search():
     global current_worker, current_thread
 
@@ -134,9 +134,7 @@ def on_search():
     worker.moveToThread(thread)
 
     thread.started.connect(worker.run)
-
-    # ✅ FIX: Have the worker emit results and let the main thread clean up
-    worker.finished.connect(lambda results: on_search_complete(results))
+    worker.finished.connect(on_search_complete)
 
     current_worker = worker
     current_thread = thread
@@ -144,7 +142,7 @@ def on_search():
     thread.start()
 
 
-# 🌟 Cancel action
+# 🌟 Cancel button action
 def on_cancel_search():
     global current_worker
     if current_worker:
@@ -154,7 +152,7 @@ def on_cancel_search():
         status_label.setText("No active search.")
 
 
-# 🌟 Add widgets to layout
+# 🌟 Layout wiring
 search_layout.addWidget(search_input)
 search_layout.addWidget(choose_folder_button)
 search_layout.addWidget(search_button)
@@ -168,10 +166,10 @@ main_layout.addWidget(status_label)
 window.setLayout(main_layout)
 window.show()
 
-# 🌟 Connect buttons
+# 🌟 Button connections
 choose_folder_button.clicked.connect(on_choose_folder)
 search_button.clicked.connect(on_search)
 cancel_button.clicked.connect(on_cancel_search)
 
-# 🌟 Start event loop
+# 🌟 Run app loop
 app.exec()
