@@ -48,8 +48,31 @@ search_layout = QHBoxLayout()
 search_input = QLineEdit()
 search_input.setPlaceholderText("Enter file name to search")
 
+import subprocess
+import platform
+
+# 🌟 Open files/folders when double-clicked
+def on_item_double_clicked(item):
+    path = item.text()
+
+    if not os.path.exists(path):
+        return
+
+    if platform.system() == "Windows":
+        os.startfile(path)
+    elif platform.system() == "Darwin":  # macOS
+        subprocess.run(["open", path])
+    else:  # Linux
+        subprocess.run(["xdg-open", path])
+
 # 🌟 Results list
 results_list = QListWidget()
+results_list.itemDoubleClicked.connect(on_item_double_clicked)
+
+# 🌟 Results list
+results_list = QListWidget()
+results_list.itemDoubleClicked.connect(on_item_double_clicked)
+
 
 # 🌟 Default search folder
 selected_folder = os.path.expanduser("~/Documents")
@@ -141,6 +164,7 @@ def on_cancel_search():
 choose_folder_button.clicked.connect(on_choose_folder)
 search_button.clicked.connect(on_search)
 cancel_button.clicked.connect(on_cancel_search)
+
 
 # 🌟 Add widgets to layouts
 search_layout.addWidget(search_input)
