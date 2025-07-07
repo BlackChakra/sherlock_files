@@ -55,6 +55,12 @@ def on_search():
     keyword = search_input.text().strip()
     results_list.clear()
 
+    # Show feedback to the user
+    results_list.addItem("Searching, please wait...")
+
+    # Force the GUI to update BEFORE starting the search
+    QApplication.processEvents()
+
     search_folder = selected_folder
     results = find_files(search_folder, keyword)
 
