@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
-from PySide6.QtCore import QThread, Signal, QObject, QTimer
+from PySide6.QtCore import QThread, Signal, QObject, Qt
 import subprocess
 import platform
 import os
@@ -33,7 +33,7 @@ class FileSearchWorker(QObject):
         self._is_cancelled = True
 
 
-# 🌟 Open files/folders when double-clicked
+# 🌟 Open files/folders on double-click
 def on_item_double_clicked(item):
     path = item.text()
 
@@ -48,7 +48,7 @@ def on_item_double_clicked(item):
         subprocess.run(["xdg-open", path])
 
 
-# 🌟 Main app setup
+# 🌟 App setup
 app = QApplication([])
 window = QWidget()
 window.setWindowTitle("Sherlock Files 🕵️‍♂️")
@@ -70,8 +70,8 @@ choose_folder_button = QPushButton("Choose Folder")
 search_button = QPushButton("Search")
 cancel_button = QPushButton("Cancel Search")
 
-# 🌟 Default search folder
-selected_folder = os.path.expanduser("~/Documents")
+# 🌟 Default search folder = Desktop for easier testing
+selected_folder = os.path.join(os.path.expanduser("~"), "Desktop")
 current_worker = None
 current_thread = None
 
@@ -87,16 +87,8 @@ def on_choose_folder():
 
 
 # 🌟 Search complete
-def on_search_complete(results, thread, worker):
+def on_search_complete(results):
     global current_worker, current_thread
-
-    thread.quit()
-    thread.wait()
-    worker.deleteLater()
-    thread.deleteLater()
-
-    current_worker = None
-    current_thread = None
 
     results_list.clear()
     if results:
@@ -106,6 +98,19 @@ def on_search_complete(results, thread, worker):
         results_list.addItem("No files found.")
 
     status_label.setText("Search complete.")
+
+    # Clean up the worker and thread
+    if current_thread:
+        current_thread.quit()
+        current_thread.wait()
+        current_thread.deleteLater()
+
+    if current_worker:
+        current_worker.deleteLater()
+
+    # Clear references
+    current_worker = None
+    current_thread = None
 
 
 # 🌟 Search action
@@ -130,11 +135,8 @@ def on_search():
 
     thread.started.connect(worker.run)
 
-    # ✅ Prevent thread wait error: schedule cleanup on main thread
-    def handle_finished(results):
-        QTimer.singleShot(0, lambda: on_search_complete(results, thread, worker))
-
-    worker.finished.connect(handle_finished)
+    # ✅ FIX: Have the worker emit results and let the main thread clean up
+    worker.finished.connect(lambda results: on_search_complete(results))
 
     current_worker = worker
     current_thread = thread
@@ -144,9 +146,8 @@ def on_search():
 
 # 🌟 Cancel action
 def on_cancel_search():
-    global current_worker, current_thread
-
-    if current_worker and current_thread:
+    global current_worker
+    if current_worker:
         current_worker.cancel()
         status_label.setText("Cancelling...")
     else:
