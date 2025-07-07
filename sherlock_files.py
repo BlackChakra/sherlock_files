@@ -2,10 +2,12 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
-from PySide6.QtCore import QThread, Signal, QObject
+from PySide6.QtCore import QThread, Signal, QObject, QTimer
+import subprocess
+import platform
 import os
 
-# ✅ Worker class with cancel support
+# 🌟 Worker thread class
 class FileSearchWorker(QObject):
     finished = Signal(list)
 
@@ -24,32 +26,12 @@ class FileSearchWorker(QObject):
                 if self._is_cancelled:
                     break
                 if self.keyword.lower() in file.lower():
-                    full_path = os.path.join(root, file)
-                    matches.append(full_path)
+                    matches.append(os.path.join(root, file))
         self.finished.emit(matches)
 
     def cancel(self):
         self._is_cancelled = True
 
-
-# 🌟 Start the app
-app = QApplication([])
-
-# 🌟 Create the main window
-window = QWidget()
-window.setWindowTitle("Sherlock Files 🕵️‍♂️")
-window.setFixedSize(600, 400)
-
-# 🌟 Layouts
-main_layout = QVBoxLayout()
-search_layout = QHBoxLayout()
-
-# 🌟 Search input
-search_input = QLineEdit()
-search_input.setPlaceholderText("Enter file name to search")
-
-import subprocess
-import platform
 
 # 🌟 Open files/folders when double-clicked
 def on_item_double_clicked(item):
@@ -60,35 +42,41 @@ def on_item_double_clicked(item):
 
     if platform.system() == "Windows":
         os.startfile(path)
-    elif platform.system() == "Darwin":  # macOS
+    elif platform.system() == "Darwin":
         subprocess.run(["open", path])
-    else:  # Linux
+    else:
         subprocess.run(["xdg-open", path])
 
-# 🌟 Results list
+
+# 🌟 Main app setup
+app = QApplication([])
+window = QWidget()
+window.setWindowTitle("Sherlock Files 🕵️‍♂️")
+window.setFixedSize(600, 400)
+
+main_layout = QVBoxLayout()
+search_layout = QHBoxLayout()
+
+search_input = QLineEdit()
+search_input.setPlaceholderText("Enter file name to search")
+
 results_list = QListWidget()
 results_list.itemDoubleClicked.connect(on_item_double_clicked)
 
-# 🌟 Results list
-results_list = QListWidget()
-results_list.itemDoubleClicked.connect(on_item_double_clicked)
+status_label = QLabel("Ready.")
 
-
-# 🌟 Default search folder
-selected_folder = os.path.expanduser("~/Documents")
-
-# 🌟 Buttons and labels
+# 🌟 Buttons
 choose_folder_button = QPushButton("Choose Folder")
 search_button = QPushButton("Search")
 cancel_button = QPushButton("Cancel Search")
-status_label = QLabel("Ready.")
 
-# 🌟 Global variables to manage worker + thread
+# 🌟 Default search folder
+selected_folder = os.path.expanduser("~/Documents")
 current_worker = None
 current_thread = None
 
 
-# 🌟 Folder picker action
+# 🌟 Folder picker
 def on_choose_folder():
     global selected_folder
     folder = QFileDialog.getExistingDirectory(window, "Select Folder")
@@ -98,7 +86,7 @@ def on_choose_folder():
         results_list.addItem(f"Searching in: {selected_folder}")
 
 
-# 🌟 Search complete handler
+# 🌟 Search complete
 def on_search_complete(results, thread, worker):
     global current_worker, current_thread
 
@@ -141,7 +129,12 @@ def on_search():
     worker.moveToThread(thread)
 
     thread.started.connect(worker.run)
-    worker.finished.connect(lambda results: on_search_complete(results, thread, worker))
+
+    # ✅ Prevent thread wait error: schedule cleanup on main thread
+    def handle_finished(results):
+        QTimer.singleShot(0, lambda: on_search_complete(results, thread, worker))
+
+    worker.finished.connect(handle_finished)
 
     current_worker = worker
     current_thread = thread
@@ -149,7 +142,7 @@ def on_search():
     thread.start()
 
 
-# 🌟 Cancel search action
+# 🌟 Cancel action
 def on_cancel_search():
     global current_worker, current_thread
 
@@ -160,13 +153,7 @@ def on_cancel_search():
         status_label.setText("No active search.")
 
 
-# 🌟 Connect buttons
-choose_folder_button.clicked.connect(on_choose_folder)
-search_button.clicked.connect(on_search)
-cancel_button.clicked.connect(on_cancel_search)
-
-
-# 🌟 Add widgets to layouts
+# 🌟 Add widgets to layout
 search_layout.addWidget(search_input)
 search_layout.addWidget(choose_folder_button)
 search_layout.addWidget(search_button)
@@ -177,9 +164,13 @@ main_layout.addWidget(QLabel("Search Results:"))
 main_layout.addWidget(results_list)
 main_layout.addWidget(status_label)
 
-# 🌟 Finalize window
 window.setLayout(main_layout)
 window.show()
 
-# 🌟 Start the app event loop
+# 🌟 Connect buttons
+choose_folder_button.clicked.connect(on_choose_folder)
+search_button.clicked.connect(on_search)
+cancel_button.clicked.connect(on_cancel_search)
+
+# 🌟 Start event loop
 app.exec()
