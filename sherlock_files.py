@@ -2,18 +2,28 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
+from PySide6.QtCore import QThread, Signal, QObject
 
 import os
 
-# 🔍 Function to find matching files in a folder
-def find_files(search_folder, keyword):
-    matches = []
-    for root, dirs, files in os.walk(search_folder):
-        for file in files:
-            if keyword.lower() in file.lower():
-                full_path = os.path.join(root, file)
-                matches.append(full_path)
-    return matches
+# ✅ Worker class for running the file search in a separate thread
+class FileSearchWorker(QObject):
+    finished = Signal(list)  # Signal to send the results back
+
+    def __init__(self, folder, keyword):
+        super().__init__()
+        self.folder = folder
+        self.keyword = keyword
+
+    def run(self):
+        matches = []
+        for root, dirs, files in os.walk(self.folder):
+            for file in files:
+                if self.keyword.lower() in file.lower():
+                    full_path = os.path.join(root, file)
+                    matches.append(full_path)
+        self.finished.emit(matches)
+
 
 # 🌟 Start the app
 app = QApplication([])
@@ -41,7 +51,8 @@ selected_folder = os.path.expanduser("~/Documents")
 choose_folder_button = QPushButton("Choose Folder")
 search_button = QPushButton("Search")
 
-# 🌟 Folder picker action
+
+# ✅ Folder picker action
 def on_choose_folder():
     global selected_folder
     folder = QFileDialog.getExistingDirectory(window, "Select Folder")
@@ -50,25 +61,50 @@ def on_choose_folder():
         results_list.clear()
         results_list.addItem(f"Searching in: {selected_folder}")
 
-# 🌟 Search action
-def on_search():
-    keyword = search_input.text().strip()
+
+# ✅ Search complete handler (defined at top level, not inside another function!)
+def on_search_complete(results, thread, worker):
+    # Stop and clean up the thread
+    thread.quit()
+    thread.wait()
+    worker.deleteLater()
+    thread.deleteLater()
+
+    # Show the search results
     results_list.clear()
-
-    # Show feedback to the user
-    results_list.addItem("Searching, please wait...")
-
-    # Force the GUI to update BEFORE starting the search
-    QApplication.processEvents()
-
-    search_folder = selected_folder
-    results = find_files(search_folder, keyword)
-
     if results:
         for file_path in results:
             results_list.addItem(file_path)
     else:
         results_list.addItem("No files found.")
+
+
+# ✅ Search action (now runs in a thread)
+def on_search():
+    keyword = search_input.text().strip()
+    results_list.clear()
+
+    if not keyword:
+        results_list.addItem("Please enter a search keyword.")
+        return
+
+    results_list.addItem("Searching, please wait...")
+    QApplication.processEvents()
+
+    # Start the worker thread
+    worker = FileSearchWorker(selected_folder, keyword)
+    thread = QThread()
+    worker.moveToThread(thread)
+
+    # When the thread starts, run the worker's run() method
+    thread.started.connect(worker.run)
+
+    # When finished, call on_search_complete
+    worker.finished.connect(lambda results: on_search_complete(results, thread, worker))
+
+    # Start the thread
+    thread.start()
+
 
 # 🌟 Connect buttons
 choose_folder_button.clicked.connect(on_choose_folder)
