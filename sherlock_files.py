@@ -3,26 +3,33 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QListWidget, QLabel, QFileDialog
 )
 from PySide6.QtCore import QThread, Signal, QObject
-
 import os
 
-# ✅ Worker class for running the file search in a separate thread
+# ✅ Worker class with cancel support
 class FileSearchWorker(QObject):
-    finished = Signal(list)  # Signal to send the results back
+    finished = Signal(list)
 
     def __init__(self, folder, keyword):
         super().__init__()
         self.folder = folder
         self.keyword = keyword
+        self._is_cancelled = False
 
     def run(self):
         matches = []
         for root, dirs, files in os.walk(self.folder):
+            if self._is_cancelled:
+                break
             for file in files:
+                if self._is_cancelled:
+                    break
                 if self.keyword.lower() in file.lower():
                     full_path = os.path.join(root, file)
                     matches.append(full_path)
         self.finished.emit(matches)
+
+    def cancel(self):
+        self._is_cancelled = True
 
 
 # 🌟 Start the app
@@ -47,12 +54,18 @@ results_list = QListWidget()
 # 🌟 Default search folder
 selected_folder = os.path.expanduser("~/Documents")
 
-# 🌟 Buttons
+# 🌟 Buttons and labels
 choose_folder_button = QPushButton("Choose Folder")
 search_button = QPushButton("Search")
+cancel_button = QPushButton("Cancel Search")
+status_label = QLabel("Ready.")
+
+# 🌟 Global variables to manage worker + thread
+current_worker = None
+current_thread = None
 
 
-# ✅ Folder picker action
+# 🌟 Folder picker action
 def on_choose_folder():
     global selected_folder
     folder = QFileDialog.getExistingDirectory(window, "Select Folder")
@@ -62,15 +75,18 @@ def on_choose_folder():
         results_list.addItem(f"Searching in: {selected_folder}")
 
 
-# ✅ Search complete handler (defined at top level, not inside another function!)
+# 🌟 Search complete handler
 def on_search_complete(results, thread, worker):
-    # Stop and clean up the thread
+    global current_worker, current_thread
+
     thread.quit()
     thread.wait()
     worker.deleteLater()
     thread.deleteLater()
 
-    # Show the search results
+    current_worker = None
+    current_thread = None
+
     results_list.clear()
     if results:
         for file_path in results:
@@ -78,46 +94,64 @@ def on_search_complete(results, thread, worker):
     else:
         results_list.addItem("No files found.")
 
+    status_label.setText("Search complete.")
 
-# ✅ Search action (now runs in a thread)
+
+# 🌟 Search action
 def on_search():
+    global current_worker, current_thread
+
     keyword = search_input.text().strip()
     results_list.clear()
+    status_label.setText("Searching...")
 
     if not keyword:
         results_list.addItem("Please enter a search keyword.")
+        status_label.setText("Ready.")
         return
 
     results_list.addItem("Searching, please wait...")
     QApplication.processEvents()
 
-    # Start the worker thread
     worker = FileSearchWorker(selected_folder, keyword)
     thread = QThread()
     worker.moveToThread(thread)
 
-    # When the thread starts, run the worker's run() method
     thread.started.connect(worker.run)
-
-    # When finished, call on_search_complete
     worker.finished.connect(lambda results: on_search_complete(results, thread, worker))
 
-    # Start the thread
+    current_worker = worker
+    current_thread = thread
+
     thread.start()
+
+
+# 🌟 Cancel search action
+def on_cancel_search():
+    global current_worker, current_thread
+
+    if current_worker and current_thread:
+        current_worker.cancel()
+        status_label.setText("Cancelling...")
+    else:
+        status_label.setText("No active search.")
 
 
 # 🌟 Connect buttons
 choose_folder_button.clicked.connect(on_choose_folder)
 search_button.clicked.connect(on_search)
+cancel_button.clicked.connect(on_cancel_search)
 
 # 🌟 Add widgets to layouts
 search_layout.addWidget(search_input)
 search_layout.addWidget(choose_folder_button)
 search_layout.addWidget(search_button)
+search_layout.addWidget(cancel_button)
 
 main_layout.addLayout(search_layout)
 main_layout.addWidget(QLabel("Search Results:"))
 main_layout.addWidget(results_list)
+main_layout.addWidget(status_label)
 
 # 🌟 Finalize window
 window.setLayout(main_layout)
